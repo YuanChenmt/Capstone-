@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integer Calculator</title>
+</head>
+<body>
+    <h2>Simple Integer Calculator</h2>
+    <form method="POST">
+        <label for="num1">Number 1:</label>
+        <input type="number" name="num1" required>
+        
+        <label for="num2">Number 2:</label>
+        <input type="number" name="num2" required>
+        
+        <label for="operation">Operation:</label>
+        <select name="operation">
+            <option value="add">Addition (+)</option>
+            <option value="subtract">Subtraction (-)</option>
+            <option value="multiply">Multiplication (×)</option>
+            <option value="divide">Division (÷)</option>
+        </select>
+        
+        <button type="submit">Calculate</button>
+    </form>
+
+    {% if result is not none %}
+        <h3>Result: {{ result }}</h3>
+    {% endif %}
+
+    {% if error %}
+        <h3 style="color: red;">{{ error }}</h3>
+    {% endif %}
+</body>
+</html>
