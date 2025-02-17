@@ -2,7 +2,9 @@ version: '3.8'
 
 services:
   web:
-    build: .
+    build: #.
+      context: "https://github.com/COMS7900/HW.git#main:docker_my"  # git repo
+    # container_name: my_web
     ports:
       - "8000:8080"  # port mapping
     volumes:
