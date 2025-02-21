@@ -1,6 +1,6 @@
 # **Installation and Usage of Singularity on Linux for Docker Image Conversion**
 
-## **1. Installation **
+## 1. Installation
 
 ### 1.1 Singularity
 
