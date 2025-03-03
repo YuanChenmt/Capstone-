@@ -4,6 +4,8 @@ node_modules/
 *.egg-info/
 .ipynb_checkpoints
 *.tsbuildinfo
+tempCodeRunnerFile.py
+AI_API/winequality-red.csv
 
 # Created by https://www.gitignore.io/api/python
 # Edit at https://www.gitignore.io/?templates=python
@@ -75,7 +77,7 @@ target/
 
 # pyenv
 .python-version
-
+.env
 # celery beat schedule file
 celerybeat-schedule
 
