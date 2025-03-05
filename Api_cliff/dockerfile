@@ -1,0 +1,25 @@
+# Use an official Python slim image as the base
+FROM python:3.10-slim
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements and install them (using no-cache to reduce image size)
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code and data into the container
+COPY . . 
+# (This copies all files in the project directory into /app in the container, 
+# including the Python scripts, sample.csv, etc.)
+
+# Expose the port that Gradio will run on (7860 by default)
+EXPOSE 7860
+
+# Define environment variables for API keys (no hardcoding values here; just placeholders for documentation)
+ENV OPENAI_API_KEY=""
+ENV WEATHER_API_KEY=""
+
+# Run the Gradio app
+CMD ["python", "app.py"]
+
