@@ -81,21 +81,29 @@ def call_openai_with_functions(user_input, api_key):
 
 # Gradio interface
 def chatbot_ui(user_input, api_key=os.getenv("OPENAI_API_KEY")):
-    return call_openai_with_functions(user_input, api_key=os.getenv("OPENAI_API_KEY"))
+    text_output, image_output, table_output = call_openai_with_functions(user_input, api_key)
+    return text_output, image_output, table_output
 
-# Create a Gradio interface
-iface = gr.Interface(
-    fn=chatbot_ui,
-    inputs=["text", "text"], 
-    outputs=[
-        "text",      # text
-        "image",     # plot
-        "dataframe"  # table
-    ],
-    title="OpenAI Chatbot + Pandas Operations",
-    description="""Ask questions or use natural language to operate on Pandas!
-    Supports text output, data visualization (image), and structured data (table).
-    """
-)
+with gr.Blocks() as iface:
+    gr.Markdown("# OpenAI Chatbot + Pandas Operations")
+    gr.Markdown("### Ask questions or use natural language to operate on Pandas!")
+
+    with gr.Row():
+        api_key_input = gr.Textbox(label="API Key (Optional)", placeholder="Enter OpenAI API Key if needed")
+        user_input = gr.Textbox(label="User Input", placeholder="Type your question...")
+
+    submit_button = gr.Button("Submit")
+
+    with gr.Column():  # **所有输出放在一个框架里**
+        output_text = gr.Textbox(label="Response", interactive=False)
+        output_image = gr.Image(label="Generated Plot")
+        output_table = gr.Dataframe(label="Table Output")
+
+    # **点击按钮触发 chatbot_ui**
+    submit_button.click(
+        fn=chatbot_ui,
+        inputs=[user_input, api_key_input],
+        outputs=[output_text, output_image, output_table]
+    )
 
 iface.launch(server_name="0.0.0.0", server_port=7860)
