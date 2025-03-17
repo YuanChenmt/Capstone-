@@ -33,3 +33,11 @@ def delete_column(column_name):
             return f"Column '{column_name}' has been deleted."
         return f"Column '{column_name}' does not exist!"
     return "Please load the data file first!"
+
+# EDA functions
+def describe_data():
+    """ Describe the data """
+    if dataframe is not None:
+        return dataframe.describe().to_dict()
+    return "Please load the data file first!"
+

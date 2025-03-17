@@ -5,7 +5,9 @@ dotenv.load_dotenv()
 import openai   
 import json
 from openai.types import FunctionDefinition  # Using OpenAI SDK's FunctionDefinition
-from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column
+from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column, describe_data
+
+# Call OpenAI API with function support
 def call_openai_with_functions(user_input, api_key):
     """ Call OpenAI API with function support """
     client = openai.OpenAI(api_key=api_key)
@@ -30,6 +32,11 @@ def call_openai_with_functions(user_input, api_key):
             'name':"delete_column",
             'description':"Delete a column.",
             'parameters':{"type": "object", "properties": {"column_name": {"type": "string"}}}
+        },
+        {
+            'name':"describe_data",
+            'description':"Describe the data.",
+            'parameters':{}
         }
     ]
 
@@ -54,7 +61,8 @@ def call_openai_with_functions(user_input, api_key):
             return summarize_top_rows()
         elif function_name == "delete_column":
             return delete_column(arguments["column_name"])
-    
+        elif function_name == "describe_data":
+            return describe_data()    
     return message.content  # Return AI's normal response
 
 # Gradio interface
