@@ -6,7 +6,7 @@ import openai
 import json
 import pandas as pd
 from openai.types import FunctionDefinition  # Using OpenAI SDK's FunctionDefinition
-from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column, describe_data, plot_covariance_heatmap
+from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column, describe_data, plot_covariance_heatmap, plot_feature_boxplots, get_dataframe_sample
 
 # Call OpenAI API with function support
 def call_openai_with_functions(user_input, api_key):
@@ -43,6 +43,16 @@ def call_openai_with_functions(user_input, api_key):
             'name':"plot_covariance_heatmap",
             'description':"Plot the covariance heatmap.",
             'parameters':{}
+        },
+        {
+            'name':"plot_feature_boxplots",
+            'description':"Plot the feature boxplots.",
+            'parameters':{}
+        },
+        {
+            'name': "get_dataframe_advice",
+            'description': "Get a small sample of the dataframe to help suggest operations.",
+            'parameters': {"type": "object", "properties": {"n": {"type": "integer"}, "max_cols": {"type": "integer"}}}
         }
     ]
 
@@ -73,37 +83,52 @@ def call_openai_with_functions(user_input, api_key):
                 return None, None, df_table  
             else:
                 return desc_result, None, None
-
         elif function_name == "plot_covariance_heatmap":
-            image_path = plot_covariance_heatmap()
-            return None, image_path, None   
+            message,image_path = plot_covariance_heatmap()
+            return message, image_path, None   
+        elif function_name == "plot_feature_boxplots":
+            message,image_path = plot_feature_boxplots()
+            return message, image_path, None        
+        elif function_name == "get_dataframe_advice":
+            sample_json = get_dataframe_sample(arguments.get("n", 5), arguments.get("max_cols", 5))
+            
+            prompt = f"""
+            Given this small sample of the dataset:
+            {sample_json}
+            With user question: {user_input}
+
+            Provide responses in pure text.
+            """
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+
+            return response.choices[0].message.content, None, None
+
     return message.content, None, None  # Return AI's normal response
 
 # Gradio interface
 def chatbot_ui(user_input, api_key=os.getenv("OPENAI_API_KEY")):
-    text_output, image_output, table_output = call_openai_with_functions(user_input, api_key)
-    return text_output, image_output, table_output
+    return call_openai_with_functions(user_input, api_key=os.getenv("OPENAI_API_KEY"))
 
-with gr.Blocks() as iface:
-    gr.Markdown("# OpenAI Chatbot + Pandas Operations")
-    gr.Markdown("### Ask questions or use natural language to operate on Pandas!")
+# Create a Gradio interface
+iface = gr.Interface(
+    fn=chatbot_ui,
+    inputs=[
+        gr.Textbox(label="Enter Command", placeholder="Type your command here..."),
+        gr.Textbox(label="API Key (Optional)", placeholder="Enter OpenAI API Key"),
+    ],
+    outputs=[
+        gr.Markdown(label="Response"),
+        gr.Image(label="Generated Plot"),
+        gr.Dataframe(label="Table Output"),
+    ],
+    title="AI-Powered Data Analysis",
+    description="Chat with OpenAI to analyze your dataset!"
+)
 
-    with gr.Row():
-        api_key_input = gr.Textbox(label="API Key (Optional)", placeholder="Enter OpenAI API Key if needed")
-        user_input = gr.Textbox(label="User Input", placeholder="Type your question...")
-
-    submit_button = gr.Button("Submit")
-
-    with gr.Column():  # **所有输出放在一个框架里**
-        output_text = gr.Textbox(label="Response", interactive=False)
-        output_image = gr.Image(label="Generated Plot")
-        output_table = gr.Dataframe(label="Table Output")
-
-    # **点击按钮触发 chatbot_ui**
-    submit_button.click(
-        fn=chatbot_ui,
-        inputs=[user_input, api_key_input],
-        outputs=[output_text, output_image, output_table]
-    )
 
 iface.launch(server_name="0.0.0.0", server_port=7860)

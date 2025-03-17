@@ -9,6 +9,7 @@ dataframe = None
 file_path_global = None
 
 current_directory = os.getcwd()
+current_directory = os.path.join(current_directory, "images")
 
 def load_csv(file_path):
     """ Load a CSV file """
@@ -75,7 +76,6 @@ def plot_covariance_heatmap(output_dir=current_directory, filename="covariance_h
     """ Save a heatmap of the covariance matrix to an images folder """
     if dataframe is not None:
         # Create the output directory if it doesn't exist
-        output_dir = os.path.join(output_dir, "images")
         os.makedirs(output_dir, exist_ok=True)
         
         # Compute the covariance matrix
@@ -92,5 +92,42 @@ def plot_covariance_heatmap(output_dir=current_directory, filename="covariance_h
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         plt.close()
         
-        return save_path
-    return "Please load the data file first!"
+        return "Covariance Heatmap done!", save_path
+    return "Please load the data file first!", None
+
+
+def plot_feature_boxplots(output_dir=current_directory, filename="feature_boxplots.png"):
+    """ Generate box plots for all numerical features and save the figure """
+    
+    if dataframe is not None:
+
+        numeric_df = dataframe.select_dtypes(include=["number"])
+
+        if numeric_df.empty:
+            return "Error: No numeric features available for box plot!", None
+        
+        os.makedirs(output_dir, exist_ok=True)
+
+        plt.figure(figsize=(12, 6)) 
+        sns.boxplot(data=numeric_df)
+        plt.xticks(rotation=45)  # rotate x-axis labels for better visibility
+        plt.title("Feature Box Plots")
+
+        save_path = os.path.join(output_dir, filename)
+        plt.savefig(save_path, dpi=300, bbox_inches="tight")
+        plt.close()
+
+        return "boxplots done!", save_path
+
+    return "Error: No data loaded. Please load a CSV file first.", None
+
+
+def get_dataframe_sample(n=5, max_cols=5):
+    """ Return a small sample of the dataframe to be included in OpenAI input """
+    
+    if dataframe is None or dataframe.empty:
+        return "No data loaded. Please load a CSV file first."
+    max_cols = min(max_cols, len(dataframe.columns))
+    sample_df = dataframe.iloc[:n, :max_cols]
+
+    return json.dumps(sample_df.to_dict(), indent=4)
