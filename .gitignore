@@ -17,6 +17,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+**/images/
+images/
 # C extensions
 *.so
 
