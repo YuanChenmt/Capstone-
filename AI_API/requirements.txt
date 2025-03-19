@@ -2,3 +2,6 @@ openai
 python-dotenv
 pandas
 gradio
+matplotlib
+seaborn
+boto3

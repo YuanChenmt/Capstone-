@@ -1,15 +1,102 @@
 import pandas as pd
 import os
+import dotenv
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
+import boto3
+from io import StringIO
+from botocore.exceptions import NoCredentialsError
 
+dotenv.load_dotenv()
 # Store the current DataFrame
 dataframe = None
 file_path_global = None
 
 current_directory = os.getcwd()
 current_directory = os.path.join(current_directory, "images")
+
+
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+S3_BUCKET = os.getenv("S3_BUCKET_NAME")
+S3_KEY=None
+
+
+s3_client = boto3.client(
+    "s3",
+    aws_access_key_id=AWS_ACCESS_KEY,
+    aws_secret_access_key=AWS_SECRET_KEY,
+    region_name=AWS_REGION
+)
+
+def load_csv_from_s3(s3_key):
+    """ Load a CSV file from an S3 bucket """
+    global dataframe
+    global file_path_global
+
+    try:
+        #get object from s3
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        data = obj["Body"].read().decode("utf-8")  # decode the bytes to string
+
+        # try to load the data as a CSV file
+        dataframe = pd.read_csv(StringIO(data))
+
+        # when the file is separated by `;`
+        if ";" in dataframe.columns[0]:  
+            dataframe = pd.read_csv(StringIO(data), sep=";")  
+
+        dataframe = dataframe.apply(pd.to_numeric, errors="coerce")
+
+        # keep track of the file path
+        file_path_global = f"s3://{S3_BUCKET}/{s3_key}"
+
+        return f"File '{s3_key}' loaded successfully from S3!"
+    
+    except Exception as e:
+        return f"Error loading file from S3: {str(e)}"
+
+def delete_s3_file():
+    """ Delete a file from an S3 bucket """
+    try:
+        s3_client.delete_object(Bucket=S3_BUCKET, Key=S3_KEY)
+        return f"S3 file '{S3_KEY}' deleted successfully."
+    except Exception as e:
+        return f"Error deleting file from S3: {str(e)}"
+
+def upload_csv_to_s3(file_path, bucket_name, s3_key):
+    """ Upload a file to an S3 bucket"""
+    s3 = boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION"),
+    )
+
+    try:
+        s3.upload_file(file_path, bucket_name, s3_key)
+        file_url = f"https://{bucket_name}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{s3_key}"
+        return f"File uploaded successfully: [Download link]({file_url})"
+    except NoCredentialsError:
+        return "AWS credentials not found. Please set them as environment variables."
+    except Exception as e:
+        return f"Error uploading file: {str(e)}"
+
+
+def upload_and_load_csv(file_path, s3_key):
+    """ Upload a CSV file to S3 and load it"""
+    global S3_KEY 
+    if S3_KEY is not None:
+        delete_s3_file()
+    S3_KEY = s3_key
+    bucket_name = os.getenv("S3_BUCKET_NAME")
+    upload_msg = upload_csv_to_s3(file_path, bucket_name, s3_key)
+    if "successfully" in upload_msg:
+        return load_csv_from_s3(s3_key)
+    return upload_msg
+
 
 def load_csv(file_path):
     """ Load a CSV file """
@@ -58,7 +145,7 @@ def describe_data():
     """Returns a properly formatted and visually appealing description of the dataset."""
    
     if dataframe is None or dataframe.empty:
-        return "No data loaded. Please load a CSV file first."
+        return "No data loaded. Please load a CSV file first.", None, None
 
     df_description = dataframe.describe(include="all").fillna("N/A")
 
@@ -69,7 +156,7 @@ def describe_data():
     formatted_output = df_description.to_dict()
     df_table = df_description.reset_index()
 
-    return formatted_output, df_table
+    return  "Done!",formatted_output, df_table
 
 
 def plot_covariance_heatmap(output_dir=current_directory, filename="covariance_heatmap.png"):

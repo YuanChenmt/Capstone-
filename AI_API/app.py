@@ -1,23 +1,31 @@
 import gradio as gr
 import os
+
 import dotenv
 dotenv.load_dotenv()
 import openai   
 import json
 import pandas as pd
 from openai.types import FunctionDefinition  # Using OpenAI SDK's FunctionDefinition
-from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column, describe_data, plot_covariance_heatmap, plot_feature_boxplots, get_dataframe_sample
+from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column
+from pandas_operations import describe_data, plot_covariance_heatmap, plot_feature_boxplots, get_dataframe_sample, upload_and_load_csv
+
 
 # Call OpenAI API with function support
-def call_openai_with_functions(user_input, api_key):
+def call_openai_with_functions(user_input, file, api_key):
     """ Call OpenAI API with function support """
     client = openai.OpenAI(api_key=api_key)
 
     pd_functions = [
         {  
-            'name':"load_csv",
-            'description':"Load a CSV file.",
+            'name':"load_local_csv",
+            'description':"Read CSV file by path.",
             'parameters':{"type": "object", "properties": {"file_path": {"type": "string"}}}
+        },
+        {
+            'name':"load_s3_csv_from_aws",
+            'description':"Load CSV file.",
+            'parameters':{}
         },
         {
             'name':"list_columns",
@@ -69,7 +77,7 @@ def call_openai_with_functions(user_input, api_key):
         function_name = message.function_call.name
         arguments = json.loads(message.function_call.arguments)
         # return message # test code, test the response when you call a functions.
-        if function_name == "load_csv":
+        if function_name == "load_local_csv":
             return load_csv(arguments["file_path"]), None, None
         elif function_name == "list_columns":
             return list_columns(), None, None
@@ -78,11 +86,11 @@ def call_openai_with_functions(user_input, api_key):
         elif function_name == "delete_column":
             return delete_column(arguments["column_name"]), None, None
         elif function_name == "describe_data":
-            desc_result, df_table = describe_data()
+            describe_content,desc_result, df_table = describe_data()
             if df_table is not None:
-                return None, None, df_table  
+                return describe_content, None, df_table  
             else:
-                return desc_result, None, None
+                return describe_content, None, None
         elif function_name == "plot_covariance_heatmap":
             message,image_path = plot_covariance_heatmap()
             return message, image_path, None   
@@ -107,18 +115,28 @@ def call_openai_with_functions(user_input, api_key):
             )
 
             return response.choices[0].message.content, None, None
+        elif function_name == "load_s3_csv_from_aws" and file is not None:
+            file_path = file.name
+            s3_key = os.path.basename(file_path)
+            return upload_and_load_csv(file_path, s3_key), None, None
 
     return message.content, None, None  # Return AI's normal response
 
 # Gradio interface
-def chatbot_ui(user_input, api_key=os.getenv("OPENAI_API_KEY")):
-    return call_openai_with_functions(user_input, api_key=os.getenv("OPENAI_API_KEY"))
+def chatbot_ui(user_input, file=None, api_key=os.getenv("OPENAI_API_KEY")):
+    print(user_input)
+    if file is not None and user_input == '\n':
+        file_path = file.name
+        s3_key = os.path.basename(file_path)
+        return upload_and_load_csv(file_path, s3_key), None, None
+    return call_openai_with_functions(user_input, file ,api_key=os.getenv("OPENAI_API_KEY"))
 
 # Create a Gradio interface
 iface = gr.Interface(
     fn=chatbot_ui,
     inputs=[
-        gr.Textbox(label="Enter Command", placeholder="Type your command here..."),
+        gr.Textbox(label="Enter Command"),
+        gr.File(label="Upload CSV File"),
         gr.Textbox(label="API Key (Optional)", placeholder="Enter OpenAI API Key"),
     ],
     outputs=[
