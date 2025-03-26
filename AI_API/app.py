@@ -1,20 +1,31 @@
 import gradio as gr
 import os
+
 import dotenv
 dotenv.load_dotenv()
 import openai   
 import json
+import pandas as pd
 from openai.types import FunctionDefinition  # Using OpenAI SDK's FunctionDefinition
 from pandas_operations import load_csv, list_columns, summarize_top_rows, delete_column
-def call_openai_with_functions(user_input, api_key):
+from pandas_operations import describe_data, plot_covariance_heatmap, plot_feature_boxplots, get_dataframe_sample, upload_and_load_csv
+
+
+# Call OpenAI API with function support
+def call_openai_with_functions(user_input, file, api_key):
     """ Call OpenAI API with function support """
     client = openai.OpenAI(api_key=api_key)
 
     pd_functions = [
         {  
-            'name':"load_csv",
-            'description':"Load a CSV file.",
+            'name':"load_local_csv",
+            'description':"Read CSV file by path.",
             'parameters':{"type": "object", "properties": {"file_path": {"type": "string"}}}
+        },
+        {
+            'name':"load_s3_csv_from_aws",
+            'description':"Load CSV file.",
+            'parameters':{}
         },
         {
             'name':"list_columns",
@@ -30,6 +41,26 @@ def call_openai_with_functions(user_input, api_key):
             'name':"delete_column",
             'description':"Delete a column.",
             'parameters':{"type": "object", "properties": {"column_name": {"type": "string"}}}
+        },
+        {
+            'name':"describe_data",
+            'description':"Describe the data.",
+            'parameters':{}
+        },
+        {
+            'name':"plot_covariance_heatmap",
+            'description':"Plot the covariance heatmap.",
+            'parameters':{}
+        },
+        {
+            'name':"plot_feature_boxplots",
+            'description':"Plot the feature boxplots.",
+            'parameters':{}
+        },
+        {
+            'name': "get_dataframe_advice",
+            'description': "Get a small sample of the dataframe to help suggest operations.",
+            'parameters': {"type": "object", "properties": {"n": {"type": "integer"}, "max_cols": {"type": "integer"}}}
         }
     ]
 
@@ -46,28 +77,76 @@ def call_openai_with_functions(user_input, api_key):
         function_name = message.function_call.name
         arguments = json.loads(message.function_call.arguments)
         # return message # test code, test the response when you call a functions.
-        if function_name == "load_csv":
-            return load_csv(arguments["file_path"])
+        if function_name == "load_local_csv":
+            return load_csv(arguments["file_path"]), None, None
         elif function_name == "list_columns":
-            return list_columns()
+            return list_columns(), None, None
         elif function_name == "summarize_top_rows":
-            return summarize_top_rows()
+            return summarize_top_rows(), None, None
         elif function_name == "delete_column":
-            return delete_column(arguments["column_name"])
-    
-    return message.content  # Return AI's normal response
+            return delete_column(arguments["column_name"]), None, None
+        elif function_name == "describe_data":
+            describe_content,desc_result, df_table = describe_data()
+            if df_table is not None:
+                return describe_content, None, df_table  
+            else:
+                return describe_content, None, None
+        elif function_name == "plot_covariance_heatmap":
+            message,image_path = plot_covariance_heatmap()
+            return message, image_path, None   
+        elif function_name == "plot_feature_boxplots":
+            message,image_path = plot_feature_boxplots()
+            return message, image_path, None        
+        elif function_name == "get_dataframe_advice":
+            sample_json = get_dataframe_sample(arguments.get("n", 5), arguments.get("max_cols", 5))
+            
+            prompt = f"""
+            Given this small sample of the dataset:
+            {sample_json}
+            With user question: {user_input}
+
+            Provide responses in pure text.
+            """
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+
+            return response.choices[0].message.content, None, None
+        elif function_name == "load_s3_csv_from_aws" and file is not None:
+            file_path = file.name
+            s3_key = os.path.basename(file_path)
+            return upload_and_load_csv(file_path, s3_key), None, None
+
+    return message.content, None, None  # Return AI's normal response
 
 # Gradio interface
-def chatbot_ui(user_input, api_key=os.getenv("OPENAI_API_KEY")):
-    return call_openai_with_functions(user_input, api_key=os.getenv("OPENAI_API_KEY"))
+def chatbot_ui(user_input, file=None, api_key=os.getenv("OPENAI_API_KEY")):
+    print(user_input)
+    if file is not None and user_input == '\n':
+        file_path = file.name
+        s3_key = os.path.basename(file_path)
+        return upload_and_load_csv(file_path, s3_key), None, None
+    return call_openai_with_functions(user_input, file ,api_key=os.getenv("OPENAI_API_KEY"))
 
+# Create a Gradio interface
 iface = gr.Interface(
     fn=chatbot_ui,
-    inputs=["text", "text"], 
-    outputs="text",
-    title="OpenAI Chatbot + Pandas Operations",
-    description="""Ask questions or use natural language to operate on Pandas!
-    You can add your api here or creaete an env file for the api."""
+    inputs=[
+        gr.Textbox(label="Enter Command"),
+        gr.File(label="Upload CSV File"),
+        gr.Textbox(label="API Key (Optional)", placeholder="Enter OpenAI API Key"),
+    ],
+    outputs=[
+        gr.Markdown(label="Response"),
+        gr.Image(label="Generated Plot"),
+        gr.Dataframe(label="Table Output"),
+    ],
+    title="AI-Powered Data Analysis",
+    description="Chat with OpenAI to analyze your dataset!"
 )
+
 
 iface.launch(server_name="0.0.0.0", server_port=7860)
